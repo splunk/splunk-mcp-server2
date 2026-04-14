@@ -20,33 +20,42 @@ An MCP (Model Context Protocol) server for retrieving data from Splunk Enterpris
   - `run_saved_search`: Execute saved searches
   - `get_config`: Get server configuration
 
-## Quick Start
+## Installation
 
-### 1. Setup Environment
+Choose one of the following methods:
+
+### Option 1: uv (local clone)
 
 ```bash
-cd /path/to/splunk-mcp-server/python
+git clone https://github.com/splunk/splunk-mcp-server2.git
+cd splunk-mcp-server2/python
 cp .env.example .env
 # Edit .env with your Splunk connection details
+uv tool install --editable .
+splunk-mcp-server
 ```
 
-### 2. Install Dependencies
+### Option 2: uvx (run directly from GitHub, no install)
 
 ```bash
-pip install -e .
+SPLUNK_HOST=your-host \
+SPLUNK_USERNAME=your-user \
+SPLUNK_PASSWORD=your-pass \
+uvx --from "git+https://github.com/splunk/splunk-mcp-server2#subdirectory=python" splunk-mcp-server
 ```
 
-### 3. Run the Server
+### Option 3: pip (install from GitHub)
 
-**SSE Mode (default):**
 ```bash
-python server.py
+pip install "git+https://github.com/splunk/splunk-mcp-server2#subdirectory=python"
+cp .env.example .env  # or set env vars manually
+# Edit .env with your Splunk connection details
+splunk-mcp-server
 ```
 
-**Stdio Mode:**
-Configure via environment or let the client spawn the server.
+## Quick Start
 
-### 4. Test with Example Clients
+### 1. Test with Example Clients
 
 ```bash
 cd tests
@@ -116,8 +125,26 @@ Edit your Claude Desktop configuration file:
 {
   "mcpServers": {
     "splunk-mcp": {
-      "command": "python",
-      "args": ["/path/to/splunk-mcp-server/python/server.py"],
+      "command": "splunk-mcp-server",
+      "env": {
+        "TRANSPORT": "stdio",
+        "SPLUNK_HOST": "your-splunk-host",
+        "SPLUNK_USERNAME": "your-username",
+        "SPLUNK_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+Or using uvx (no prior install required):
+
+```json
+{
+  "mcpServers": {
+    "splunk-mcp": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/splunk/splunk-mcp-server2#subdirectory=python", "splunk-mcp-server"],
       "env": {
         "TRANSPORT": "stdio",
         "SPLUNK_HOST": "your-splunk-host",
@@ -135,8 +162,7 @@ Edit your Claude Desktop configuration file:
 
 Start the server:
 ```bash
-cd /path/to/splunk-mcp-server/python
-python server.py
+splunk-mcp-server
 ```
 
 Add to Claude Code:
@@ -147,8 +173,11 @@ claude mcp add --transport sse --scope project splunk-mcp-server http://localhos
 **Stdio Mode Configuration:**
 
 ```bash
-cd /path/to/splunk-mcp-server/python
-claude mcp add splunk-mcp-server -e TRANSPORT=stdio --scope project -e SPLUNK_HOST=your-host -e SPLUNK_USERNAME=your-user -e SPLUNK_PASSWORD=your-pass -- python server.py
+# Using installed command (uv tool install or pip install)
+claude mcp add splunk-mcp-server -e TRANSPORT=stdio --scope project -e SPLUNK_HOST=your-host -e SPLUNK_USERNAME=your-user -e SPLUNK_PASSWORD=your-pass -- splunk-mcp-server
+
+# Using uvx (no prior install required)
+claude mcp add splunk-mcp-server -e TRANSPORT=stdio --scope project -e SPLUNK_HOST=your-host -e SPLUNK_USERNAME=your-user -e SPLUNK_PASSWORD=your-pass -- uvx --from "git+https://github.com/splunk/splunk-mcp-server2#subdirectory=python" splunk-mcp-server
 
 # claude mcp remove splunk-mcp-server [--scope project]
 ```

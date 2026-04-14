@@ -18,4 +18,4 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["server", "helpers", "splunk_client"]
+py-modules = ["server", "helpers", "splunk_client", "guardrails", "spl_risk_rules"]

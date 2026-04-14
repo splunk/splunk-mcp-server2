@@ -59,7 +59,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 # Initialize FastMCP server
 mcp = FastMCP(
     os.getenv("SERVER_NAME", "Splunk MCP"),
-    description=os.getenv("SERVER_DESCRIPTION", "MCP server for retrieving data from Splunk"),
+    instructions=os.getenv("SERVER_DESCRIPTION", "MCP server for retrieving data from Splunk"),
     lifespan=app_lifespan,
     host=os.getenv("HOST", "0.0.0.0"),
     port=int(os.getenv("PORT", "8050"))
@@ -490,21 +490,24 @@ def signal_handler(signum, frame):
     print("\n\n✨ Server shutdown ...")
     sys.exit(0)
 
-async def main():
+async def _main():
     # Set up signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     transport = os.getenv("TRANSPORT", "sse")
     if transport == "sse":
         await mcp.run_sse_async()
     else:
         await mcp.run_stdio_async()
 
-if __name__ == "__main__":
+def main():
     try:
-        asyncio.run(main())
+        asyncio.run(_main())
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully without printing stack trace
         print("\n\n✨ Server shutdown ...")
         sys.exit(0)
+
+if __name__ == "__main__":
+    main()
