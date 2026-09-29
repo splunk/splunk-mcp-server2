@@ -85,6 +85,13 @@ class SplunkClient:
                     return data["results"]
                 elif "result" in data:
                     return [data["result"]]
+                # Splunk reports some search failures (e.g. invalid SPL in a
+                # tstats command) as HTTP 200 with a messages payload instead
+                # of an HTTP error. Returning [] here (rather than falling off
+                # the end and returning None) keeps the failure visible: the
+                # caller sees event_count 0, and _raise_for_messages below
+                # surfaces the FATAL text for callers that check it.
+                return []
             except json.JSONDecodeError:
                 # Fall back to line-by-line parsing (export format)
                 events = []
@@ -147,12 +154,40 @@ class SplunkClient:
         try:
             response = await self._client.post("/services/search/jobs/oneshot", data=params)
             response.raise_for_status()
-            return self._parse_response(response.text, "json")
+            events = self._parse_response(response.text, "json")
+            if events is None:
+                # Splunk reports some search failures (e.g. invalid SPL) as
+                # HTTP 200 with a messages payload instead of an HTTP error.
+                # Surface the actual FATAL/ERROR text rather than failing later
+                # with a generic TypeError from len(None).
+                messages = self._extract_messages(response.text)
+                if messages:
+                    raise SplunkAPIError("Search failed: " + "; ".join(messages),
+                                         details={"splunk_messages": messages})
+                events = []
+            return events
         except httpx.HTTPStatusError as e:
             raise SplunkAPIError(f"Search failed", status_code=e.response.status_code, 
                                details={"error": e.response.text})
+        except SplunkAPIError:
+            raise
         except Exception as e:
             raise SplunkAPIError(f"Search failed: {str(e)}")
+
+    def _extract_messages(self, response_text: str) -> List[str]:
+        """Extract FATAL/ERROR message texts from a Splunk JSON response."""
+        try:
+            data = json.loads(response_text)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        messages = data.get("messages") if isinstance(data, dict) else None
+        if not isinstance(messages, list):
+            return []
+        return [
+            f"{m.get('type', 'ERROR')}: {m.get('text', '')}"
+            for m in messages
+            if isinstance(m, dict) and str(m.get("type", "")).upper() in ("FATAL", "ERROR")
+        ]
             
     async def search_export(self, query: str, earliest_time: str = "-24h",
                           latest_time: str = "now", max_count: int = 100) -> List[Dict[str, Any]]:
@@ -188,7 +223,13 @@ class SplunkClient:
             response = await self._client.post("/services/search/jobs/export", data=params)
             response.raise_for_status()
             events = self._parse_response(response.text, "json")
-            
+            if events is None:
+                messages = self._extract_messages(response.text)
+                if messages:
+                    raise SplunkAPIError("Export search failed: " + "; ".join(messages),
+                                         details={"splunk_messages": messages})
+                events = []
+
             # Limit results if needed
             if max_count > 0:
                 return events[:max_count]
@@ -196,6 +237,8 @@ class SplunkClient:
         except httpx.HTTPStatusError as e:
             raise SplunkAPIError(f"Export search failed", status_code=e.response.status_code,
                                details={"error": e.response.text})
+        except SplunkAPIError:
+            raise
         except Exception as e:
             raise SplunkAPIError(f"Export search failed: {str(e)}")
             
